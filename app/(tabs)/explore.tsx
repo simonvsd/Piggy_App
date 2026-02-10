@@ -98,7 +98,7 @@ export default function PiggyBankScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Piggy Bank</Text>
+          <Text style={styles.title}>Deposit or Withdraw</Text>
           <Text style={styles.subtitle}>Add or remove cash</Text>
         </View>
 
@@ -201,7 +201,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    paddingTop: 48,
+    alignItems: 'center',      // horizontal centering
+    paddingTop: 55,
     paddingHorizontal: 20,
     paddingBottom: 16,
   },

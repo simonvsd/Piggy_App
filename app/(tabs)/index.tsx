@@ -247,7 +247,7 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              <EquityChart series={prepareChartData(series, chartRange)} />
+              <EquityChart series={prepareChartData(series, chartRange)} range={chartRange} />
             </>
           )}
         </View>
@@ -329,10 +329,10 @@ const styles = StyleSheet.create({
     color: COLORS.negative,
   },
   header: {
-    paddingTop: 48,
+    alignItems: 'center',      // horizontal centering
+    paddingTop: 55,
     paddingHorizontal: 20,
     paddingBottom: 16,
-    backgroundColor: COLORS.background,
   },
   title: {
     fontSize: 28,
