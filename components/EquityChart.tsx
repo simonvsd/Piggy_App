@@ -21,7 +21,7 @@ function formatDate(ts: number): string {
 function seriesToChartData(series: EquitySeriesPoint[]): { value: number; label: string }[] {
   return series.map((p) => ({
     value: p.total_equity,
-    label: formatDate(p.timestamp),
+    label: formatDate(p.timestamp > 1e12 ? p.timestamp : p.timestamp * 1000),
   }));
 }
 
@@ -40,7 +40,8 @@ export function EquityChart({ series }: Props) {
 
   const chartData = seriesToChartData(series);
   const screenWidth = Dimensions.get("window").width;
-  const chartWidth = screenWidth - CARD_PADDING * 2 - 40;
+  const cardContentWidth = screenWidth - 20 * 2 - 20 * 2; // margins + padding
+  const chartWidth = Math.max(0, cardContentWidth - 20);   // inset so x-axis stays inside card
 
   return (
     <View style={styles.card}>
@@ -76,6 +77,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: CHART_HEIGHT + 40,
+    overflow: "hidden",
   },
   emptyText: {
     fontSize: 15,

@@ -1,8 +1,9 @@
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -32,15 +33,63 @@ const RANGE_MS: Record<ChartRange, number> = {
   "1D": 24 * 60 * 60 * 1000,
   "1W": 7 * 24 * 60 * 60 * 1000,
   "1M": 30 * 24 * 60 * 60 * 1000,
-  "1Y": 365 * 24 * 60 * 60 * 1000,
+  "1Y": 366 * 24 * 60 * 60 * 1000,
 };
 
+const SEVEN_DAYS_SEC = 7 * 24 * 60 * 60;
+
 function filterSeriesByRange(series: EquitySeriesPoint[], range: ChartRange): EquitySeriesPoint[] {
-  const cutoff = Date.now() - RANGE_MS[range];
-  return series.filter((p) => p.timestamp >= cutoff);
+  const cutoffMs = Date.now() - RANGE_MS[range];
+  const toMs = (p: EquitySeriesPoint) => (p.timestamp > 1e12 ? p.timestamp : p.timestamp * 1000);
+  return series
+    .filter((p) => toMs(p) >= cutoffMs)
+    .sort((a, b) => toMs(a) - toMs(b));
 }
 
+/** 1M: one point every 7 days. 1Y: one point per month. 1D/1W: no downsampling. */
+function downsampleEquityByRange(series: EquitySeriesPoint[], range: ChartRange): EquitySeriesPoint[] {
+  if (series.length === 0) return series;
+  if (range === "1D" || range === "1W") return series;
+
+  const toSec = (p: EquitySeriesPoint) => (p.timestamp > 1e12 ? p.timestamp / 1000 : p.timestamp);
+  const toMs = (p: EquitySeriesPoint) => (p.timestamp > 1e12 ? p.timestamp : p.timestamp * 1000);
+
+  if (range === "1M") {
+    const bucketMap = new Map<number, EquitySeriesPoint>();
+    for (const p of series) {
+      const bucket = Math.floor(toSec(p) / SEVEN_DAYS_SEC);
+      const existing = bucketMap.get(bucket);
+      if (!existing || toSec(p) > toSec(existing)) {
+        bucketMap.set(bucket, p);
+      }
+    }
+    return Array.from(bucketMap.values()).sort((a, b) => toSec(a) - toSec(b));
+  }
+
+  if (range === "1Y") {
+    const bucketMap = new Map<number, EquitySeriesPoint>();
+    for (const p of series) {
+      const d = new Date(toMs(p));
+      const bucket = d.getFullYear() * 12 + d.getMonth();
+      const existing = bucketMap.get(bucket);
+      if (!existing || toMs(p) > toMs(existing)) {
+        bucketMap.set(bucket, p);
+      }
+    }
+    return Array.from(bucketMap.values()).sort((a, b) => toMs(a) - toMs(b));
+  }
+
+  return series;
+}
+
+function prepareChartData(series: EquitySeriesPoint[], range: ChartRange): EquitySeriesPoint[] {
+  const filtered = filterSeriesByRange(series, range);
+  return downsampleEquityByRange(filtered, range);
+}
+
+
 export default function HomeScreen() {
+  const router = useRouter();
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -132,79 +181,85 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>🐷 Piggy Portfolio</Text>
-      </View>
-
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>Total Equity</Text>
-        <Text style={styles.totalEquity}>${snapshot.total_equity.toFixed(2)}</Text>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summarySecondary}>Cash</Text>
-          <Text style={styles.summaryValue}>${snapshot.cash.toFixed(2)}</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summarySecondary}>Realized P&L</Text>
-          <Text style={[styles.summaryValue, snapshot.realized_pnl >= 0 ? styles.positive : styles.negative]}>
-            ${snapshot.realized_pnl.toFixed(2)}
-          </Text>
-        </View>
-      </View>
-
-      <TouchableOpacity
-  style={styles.refreshButton}
-  onPress={handleRefreshMarket}
->
-  <Text style={styles.refreshButtonText}>Refresh Market Prices</Text>
-</TouchableOpacity>
-
-
-      <View style={chartLoading ? styles.chartCard : undefined}>
-        {chartLoading ? (
-          <>
-            <ActivityIndicator size="small" color={COLORS.textSecondary} />
-            <Text style={styles.chartLoadingText}>Loading chart…</Text>
-          </>
-        ) : (
-          <>
-            <View style={styles.chartRangeRow}>
-              {CHART_RANGES.map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  onPress={() => setChartRange(r)}
-                  style={[styles.chartRangeButton, chartRange === r && styles.chartRangeButtonActive]}
-                >
-                  <Text style={[styles.chartRangeLabel, chartRange === r && styles.chartRangeLabelActive]}>{r}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <EquityChart series={filterSeriesByRange(series, chartRange)} />
-          </>
-        )}
-      </View>
-
-      <Text style={styles.sectionTitle}>Positions</Text>
-
-      <FlatList
-        data={positions}
-        keyExtractor={(p) => p.symbol}
-        contentContainerStyle={positions.length === 0 ? styles.listEmpty : styles.listContent}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.textSecondary} />
         }
-        ListEmptyComponent={
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>🐷 Piggy Portfolio</Text>
+        </View>
+
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Total Equity</Text>
+          <Text style={styles.totalEquity}>${snapshot.total_equity.toFixed(2)}</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summarySecondary}>Cash</Text>
+            <Text style={styles.summaryValue}>${snapshot.cash.toFixed(2)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summarySecondary}>Realized P&L</Text>
+            <Text style={[styles.summaryValue, snapshot.realized_pnl >= 0 ? styles.positive : styles.negative]}>
+              ${snapshot.realized_pnl.toFixed(2)}
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshMarket}>
+          <Text style={styles.refreshButtonText}>Refresh Market Prices</Text>
+        </TouchableOpacity>
+
+        <View style={chartLoading ? styles.chartCard : undefined}>
+          {chartLoading ? (
+            <>
+              <ActivityIndicator size="small" color={COLORS.textSecondary} />
+              <Text style={styles.chartLoadingText}>Loading chart…</Text>
+            </>
+          ) : (
+            <>
+              <View style={styles.chartRangeRow}>
+                {CHART_RANGES.map((r) => (
+                  <TouchableOpacity
+                    key={r}
+                    onPress={() => setChartRange(r)}
+                    style={[styles.chartRangeButton, chartRange === r && styles.chartRangeButtonActive]}
+                  >
+                    <Text style={[styles.chartRangeLabel, chartRange === r && styles.chartRangeLabelActive]}>{r}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <EquityChart series={prepareChartData(series, chartRange)} />
+            </>
+          )}
+        </View>
+
+        <Text style={styles.sectionTitle}>Positions</Text>
+
+        {positions.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No positions</Text>
             <Text style={styles.emptySubtext}>Place a trade to see positions here.</Text>
           </View>
-        }
-        renderItem={({ item }) => <PositionRow p={item} />}
-      />
+        ) : (
+          <View style={styles.listContent}>
+            {positions.map((item) => (
+              <PositionRow
+                key={item.symbol}
+                p={item}
+                onPress={() => router.push((`/position/${item.symbol}`) as Parameters<typeof router.push>[0])}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
-function PositionRow({ p }: { p: Position }) {
+function PositionRow({ p, onPress }: { p: Position; onPress: () => void }) {
   const pnlColor =
     p.unrealized_pnl > 0
       ? COLORS.positive
@@ -213,7 +268,7 @@ function PositionRow({ p }: { p: Position }) {
       : COLORS.text;
 
   return (
-    <View style={styles.row}>
+    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
       <View>
         <Text style={styles.rowSymbol}>
           {p.symbol} (${p.current_price.toFixed(2)})
@@ -226,7 +281,7 @@ function PositionRow({ p }: { p: Position }) {
           {p.unrealized_pnl >= 0 ? "+" : ""}${p.unrealized_pnl.toFixed(2)}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -235,6 +290,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 32,
   },
   loadingContainer: {
     flex: 1,

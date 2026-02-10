@@ -37,13 +37,29 @@ export async function getSnapshot(): Promise<Snapshot> {
 }
 
 export async function getEquitySeries(): Promise<{ timestamp: number; total_equity: number }[]> {
-  const res = await fetch(`${API_BASE}/portfolio/equity_series`);
+  const url = `${API_BASE}/portfolio/equity_series`;
+
+  console.log("EQUITY SERIES → URL:", url);
+
+  const res = await fetch(url);
+
+  console.log("EQUITY SERIES → status:", res.status);
+
+  const text = await res.text();
+
+  console.log("EQUITY SERIES → raw body:", text);
+
   if (!res.ok) {
     throw new Error("Failed to load equity series");
   }
-  const data = await res.json();
+
+  const data = JSON.parse(text);
+
+  console.log("EQUITY SERIES → parsed:", data);
+
   return data.series ?? [];
 }
+
 
 export async function getPositions(): Promise<Position[]> {
   const res = await fetch(`${API_BASE}/portfolio/positions`);
@@ -107,3 +123,47 @@ export async function refreshMarket(): Promise<Snapshot> {
 
   return data;
 }
+
+export async function addCash(amount: number): Promise<Snapshot | void> {
+  const res = await fetch(`${API_BASE}/portfolio/add_cash`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ amount }),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    let message = "Failed to add cash";
+    if (text) {
+      try {
+        const data = JSON.parse(text);
+        message = data.error || message;
+      } catch {
+        message = text;
+      }
+    }
+    throw new Error(message);
+  }
+  if (!text || text.trim() === "") return;
+  try {
+    return JSON.parse(text) as Snapshot;
+  } catch {
+    return;
+  }
+}
+
+export type MarketHistoryPoint = { timestamp: number; close: number };
+
+export async function getMarketHistory(symbol: string) {
+  const res = await fetch(`${API_BASE}/market/history?symbol=${symbol}`);
+
+  console.log("RAW MARKET HISTORY STATUS:", res.status);
+
+  const data = await res.json();
+
+  console.log("RAW MARKET HISTORY RESPONSE:", data);
+
+  if (!res.ok) throw new Error("Failed to load history");
+
+  return data.series ?? data.prices ?? data ?? [];
+}
+
