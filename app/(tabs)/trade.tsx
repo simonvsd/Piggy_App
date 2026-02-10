@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Keyboard,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
 import { getSnapshot, placeTrade } from "../../services/api";
 import { notifyPortfolioChanged } from "../../services/portfolioEvents";
 
@@ -10,10 +20,6 @@ const COLORS = {
   text: "#1c1c1e",
   textSecondary: "#8e8e93",
   inputBg: "#f2f2f7",
-  buy: "#2e7d32",
-  buyDisabled: "#81c784",
-  sell: "#c62828",
-  sellDisabled: "#e57373",
   error: "#ff3b30",
 };
 
@@ -80,13 +86,14 @@ export default function TradeScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Trade</Text>
-      </View>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Trade</Text>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.label}>Symbol</Text>
+        <View style={styles.card}>
+          <Text style={styles.label}>Symbol</Text>
         <TextInput
           style={styles.input}
           value={symbol}
@@ -122,7 +129,16 @@ export default function TradeScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.label}>Quantity</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>Quantity</Text>
+          <TouchableOpacity
+            onPress={Keyboard.dismiss}
+            style={styles.doneButton}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.doneButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
         <TextInput
           style={[styles.input, !isValidQty && quantity !== "" && styles.inputError]}
           value={quantity}
@@ -133,6 +149,8 @@ export default function TradeScreen() {
           keyboardType="numeric"
           placeholder="0"
           placeholderTextColor={COLORS.textSecondary}
+          returnKeyType="done"
+          onSubmitEditing={Keyboard.dismiss}
         />
         {quantity !== "" && !isValidQty && (
           <Text style={styles.inlineError}>Quantity must be greater than 0</Text>
@@ -148,7 +166,7 @@ export default function TradeScreen() {
           disabled={!canSubmit}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>BUY</Text>
+          <Text style={styles.buyButtonText}>BUY</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -157,10 +175,11 @@ export default function TradeScreen() {
           disabled={!canSubmit}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>SELL</Text>
+          <Text style={styles.sellButtonText}>SELL</Text>
         </TouchableOpacity>
       </View>
-    </View>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -193,6 +212,21 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: COLORS.text,
     marginBottom: 8,
+  },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  doneButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  doneButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.text,
   },
   priceRow: {
     marginBottom: 16,
@@ -261,14 +295,21 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buyButton: {
-    backgroundColor: COLORS.buy,
+    backgroundColor: "#000",
     marginBottom: 12,
   },
   sellButton: {
-    backgroundColor: COLORS.sell,
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#000",
   },
-  buttonText: {
+  buyButtonText: {
     color: "#fff",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+  sellButtonText: {
+    color: "#000",
     fontSize: 17,
     fontWeight: "700",
   },

@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -37,6 +37,7 @@ const RANGE_MS: Record<ChartRange, number> = {
 };
 
 const SEVEN_DAYS_SEC = 7 * 24 * 60 * 60;
+const EQUITY_CHART_CACHE_MS = 6 * 60 * 60 * 1000; // refresh at max every 6 hours
 
 function filterSeriesByRange(series: EquitySeriesPoint[], range: ChartRange): EquitySeriesPoint[] {
   const cutoffMs = Date.now() - RANGE_MS[range];
@@ -96,6 +97,8 @@ export default function HomeScreen() {
   const [series, setSeries] = useState<EquitySeriesPoint[]>([]);
   const [chartLoading, setChartLoading] = useState(true);
   const [chartRange, setChartRange] = useState<ChartRange>("1M");
+  const lastEquityFetchRef = useRef<number>(0);
+  const lastEquityValueRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     if (DEBUG) console.log("[Home] load() started");
@@ -105,14 +108,27 @@ export default function HomeScreen() {
       if (DEBUG) console.log("[Home] load() completed", { cash: data.cash, positionsCount: data.positions?.length });
       setSnapshot(data);
 
-      setChartLoading(true);
-      try {
-        const eq = await getEquitySeries();
-        setSeries(eq ?? []);
-      } catch (e) {
-        console.error("Chart load error", e);
-        setSeries([]);
-      } finally {
+      const now = Date.now();
+      const equityChanged = data.total_equity !== lastEquityValueRef.current;
+      const shouldFetchEquity =
+        lastEquityFetchRef.current === 0 ||
+        now - lastEquityFetchRef.current >= EQUITY_CHART_CACHE_MS ||
+        equityChanged;
+
+      if (shouldFetchEquity) {
+        setChartLoading(true);
+        try {
+          const eq = await getEquitySeries();
+          setSeries(eq ?? []);
+          lastEquityFetchRef.current = Date.now();
+          lastEquityValueRef.current = data.total_equity;
+        } catch (e) {
+          console.error("Chart load error", e);
+          setSeries([]);
+        } finally {
+          setChartLoading(false);
+        }
+      } else {
         setChartLoading(false);
       }
     } catch (err) {
@@ -190,7 +206,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>🐷 Piggy Portfolio</Text>
+          <Text style={styles.title}>🐷 Piggy Bank</Text>
         </View>
 
         <View style={styles.summaryCard}>
@@ -209,7 +225,7 @@ export default function HomeScreen() {
         </View>
 
         <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshMarket}>
-          <Text style={styles.refreshButtonText}>Refresh Market Prices</Text>
+          <Text style={styles.refreshButtonText}>Refresh</Text>
         </TouchableOpacity>
 
         <View style={chartLoading ? styles.chartCard : undefined}>

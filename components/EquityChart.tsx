@@ -4,7 +4,7 @@ import { LineChart } from "react-native-gifted-charts";
 
 const CARD_PADDING = 20;
 const CHART_HEIGHT = 200;
-const LINE_COLOR = "#1e88e5";
+const LINE_COLOR = "#F4A6B8"; // pig emoji pink (matches Home accent)
 const COLORS = {
   card: "#ffffff",
   cardBorder: "#e5e5ea",
@@ -51,22 +51,36 @@ export function EquityChart({ series }: Props) {
   return (
     <View style={styles.card}>
       <LineChart
-        data={chartData}
-        width={chartWidth}
-        height={CHART_HEIGHT}
-        color={LINE_COLOR}
-        thickness={2}
-        curvature={0.2}
-        hideDataPoints={chartData.length > 15}
-        spacing={chartData.length <= 2 ? Math.max(40, chartWidth / (chartData.length || 1)) : undefined}
-        xAxisLabelTextStyle={styles.axisLabel}
-       // xAxisLabelCount={Math.min(chartData.length, 5)}
-        yAxisTextStyle={styles.axisLabel}
-        noOfSections={4}
-        hideRules={true}
-        showVerticalLines={false}
-        yAxisLabelPrefix="$"
-      />
+  data={chartData}
+  width={chartWidth}
+  height={CHART_HEIGHT}
+  color={LINE_COLOR}
+  thickness={2}
+  curvature={0.2}
+
+  hideDataPoints={chartData.length > 1000}
+  spacing={
+    chartData.length <= 2
+      ? Math.max(40, chartWidth / (chartData.length || 1))
+      : undefined
+  }
+
+  xAxisLabelTextStyle={styles.axisLabel}
+  yAxisTextStyle={styles.axisLabel}
+  yAxisLabelPrefix="$"
+
+  // ----- EQUAL DISTANCE HORIZONTAL LINES -----
+  hideRules={false}
+  rulesType="solid"
+  rulesColor="rgba(0,0,0,0.10)"
+  rulesThickness={1}
+
+  noOfSections={6}        // controls how many equally spaced lines
+
+  showVerticalLines={false}
+/>
+
+
     </View>
   );
 }
