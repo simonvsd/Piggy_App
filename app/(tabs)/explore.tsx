@@ -99,14 +99,14 @@ export default function PiggyBankScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Deposit or Withdraw</Text>
-          <Text style={styles.subtitle}>Add or remove cash</Text>
+          
         </View>
 
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
         >
           <View style={styles.card}>
             <View style={styles.labelRow}>

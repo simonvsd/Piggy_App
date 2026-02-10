@@ -1,8 +1,10 @@
+import { MarketPriceChart } from "@/components/MarketPriceChart";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Keyboard,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -10,8 +12,14 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { getSnapshot, placeTrade } from "../../services/api";
+import {
+  getMarketHistory,
+  getSnapshot,
+  placeTrade,
+  type MarketHistoryPoint,
+} from "../../services/api";
 import { notifyPortfolioChanged } from "../../services/portfolioEvents";
+
 
 const COLORS = {
   background: "#f2f2f7",
@@ -29,6 +37,7 @@ export default function TradeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
+  const [history, setHistory] = useState<MarketHistoryPoint[]>([]);
   const lastKnownPricesRef = useRef<Record<string, number>>({});
 
   const loadPrice = useCallback(async () => {
@@ -67,9 +76,29 @@ export default function TradeScreen() {
     loadPrice();
   }, [loadPrice]);
 
+  const loadHistory = useCallback(async () => {
+    const sym = symbol.trim().toUpperCase();
+    if (!sym) {
+      setHistory([]);
+      return;
+    }
+    const historyData = await getMarketHistory(sym).catch(() => []);
+    setHistory(Array.isArray(historyData) ? historyData : []);
+  }, [symbol]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
   const qtyNum = Number(quantity);
   const isValidQty = !Number.isNaN(qtyNum) && qtyNum > 0;
   const canSubmit = isValidQty;
+
+  const lastCloseFromHistory =
+    history.length > 0
+      ? [...history].sort((a, b) => a.timestamp - b.timestamp)[history.length - 1]?.close ?? null
+      : null;
+  const displayPrice = history.length > 0 ? (currentPrice ?? lastCloseFromHistory) : null;
 
   async function submit(side: "BUY" | "SELL") {
     if (!canSubmit) return;
@@ -92,10 +121,16 @@ export default function TradeScreen() {
           <Text style={styles.title}>Trade</Text>
         </View>
 
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={true}
+        >
         <View style={styles.card}>
           <Text style={styles.label}>Symbol</Text>
-        <TextInput
-          style={styles.input}
+          <TextInput
+          style={[styles.input, history.length > 0 && styles.symbolInputValid]}
           value={symbol}
           onChangeText={(t) => {
             setSymbol(t);
@@ -104,7 +139,12 @@ export default function TradeScreen() {
           placeholder="e.g. AAPL"
           placeholderTextColor={COLORS.textSecondary}
           autoCapitalize="characters"
+
+          returnKeyType="done"
+          onSubmitEditing={Keyboard.dismiss}
+          blurOnSubmit={true}
         />
+
 
         <View style={styles.priceRow}>
           <View style={styles.priceLabelRow}>
@@ -113,10 +153,12 @@ export default function TradeScreen() {
             </Text>
             {priceLoading ? (
               <ActivityIndicator size="small" color={COLORS.textSecondary} />
-            ) : currentPrice != null ? (
-              <Text style={styles.priceValue}>${currentPrice.toFixed(2)}</Text>
+            ) : history.length === 0 ? (
+              <Text style={styles.priceUnavailable}>Not available</Text>
+            ) : displayPrice != null ? (
+              <Text style={styles.priceValue}>${displayPrice.toFixed(2)}</Text>
             ) : (
-              <Text style={styles.priceUnavailable}>Price unavailable</Text>
+              <Text style={styles.priceUnavailable}>Not available</Text>
             )}
           </View>
           <TouchableOpacity
@@ -130,13 +172,20 @@ export default function TradeScreen() {
         </View>
 
         <View style={styles.labelRow}>
-          <Text style={styles.label}>Quantity</Text>
+          <View style={styles.labelWithTotal}>
+            <Text style={styles.label}>Quantity</Text>
+            {history.length > 0 && displayPrice != null && isValidQty && (
+              <Text style={styles.totalLabel}>
+              {" "} (${(displayPrice * qtyNum).toFixed(2)})
+            </Text>            
+            )}
+          </View>
           <TouchableOpacity
             onPress={Keyboard.dismiss}
             style={styles.doneButton}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Text style={styles.doneButtonText}>Done</Text>
+            <Text style={styles.doneButtonText}></Text>
           </TouchableOpacity>
         </View>
         <TextInput
@@ -178,6 +227,14 @@ export default function TradeScreen() {
           <Text style={styles.sellButtonText}>SELL</Text>
         </TouchableOpacity>
       </View>
+
+      {symbol.trim() !== "" && (
+        <>
+          <Text style={styles.sectionTitle}>{symbol.trim().toUpperCase() || "—"} Price history</Text>
+          <MarketPriceChart series={history} />
+        </>
+      )}
+        </ScrollView>
       </View>
     </TouchableWithoutFeedback>
   );
@@ -188,8 +245,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 200,
+  },
   header: {
-    alignItems: 'center',      // horizontal centering
+    alignItems: "center",
     paddingTop: 55,
     paddingHorizontal: 20,
     paddingBottom: 16,
@@ -220,6 +283,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 8,
   },
+  labelWithTotal: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  totalLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: COLORS.textSecondary,  // makes it grey
+    lineHeight: 24,               // increases vertical height only
+  },  
   doneButton: {
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -273,6 +347,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     marginBottom: 16,
   },
+  symbolInputValid: {
+    fontWeight: "700",
+  },
   inputError: {
     borderWidth: 1,
     borderColor: COLORS.error,
@@ -285,6 +362,7 @@ const styles = StyleSheet.create({
   },
   buttons: {
     paddingHorizontal: 20,
+    marginBottom: 10,   // <-- ADD THIS
   },
   button: {
     paddingVertical: 16,
@@ -313,5 +391,13 @@ const styles = StyleSheet.create({
     color: "#000",
     fontSize: 17,
     fontWeight: "700",
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    marginTop: 24,
   },
 });

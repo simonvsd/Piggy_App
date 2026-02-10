@@ -108,7 +108,7 @@ export default function PositionDetailScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
       >
         <View style={styles.priceCard}>
           <Text style={styles.priceLabel}>Current price</Text>

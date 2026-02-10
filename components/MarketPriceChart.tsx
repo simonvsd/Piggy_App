@@ -135,8 +135,11 @@ export function MarketPriceChart({ series }: Props) {
           spacing={chartData.length <= 2 ? Math.max(40, chartWidth / (chartData.length || 1)) : undefined}
           xAxisLabelTextStyle={styles.axisLabel}
           yAxisTextStyle={styles.axisLabel}
-          noOfSections={4}
-          hideRules={true}
+          noOfSections={6}
+          hideRules={false}
+          rulesType="solid"
+          rulesColor="rgba(0,0,0,0.10)"
+          rulesThickness={1}
           showVerticalLines={false}
           yAxisLabelPrefix="$"
         />
