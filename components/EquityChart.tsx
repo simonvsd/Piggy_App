@@ -18,12 +18,17 @@ function formatDate(ts: number): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function toMs(timestamp: number): number {
+  return timestamp > 1e12 ? timestamp : timestamp * 1000;
+}
+
 function seriesToChartData(series: EquitySeriesPoint[]): { value: number; label: string }[] {
   return series.map((p) => ({
     value: p.total_equity,
-    label: formatDate(p.timestamp > 1e12 ? p.timestamp : p.timestamp * 1000),
+    label: formatDate(toMs(p.timestamp)),
   }));
 }
+
 
 type Props = {
   series: EquitySeriesPoint[];
@@ -55,6 +60,7 @@ export function EquityChart({ series }: Props) {
         hideDataPoints={chartData.length > 15}
         spacing={chartData.length <= 2 ? Math.max(40, chartWidth / (chartData.length || 1)) : undefined}
         xAxisLabelTextStyle={styles.axisLabel}
+       // xAxisLabelCount={Math.min(chartData.length, 5)}
         yAxisTextStyle={styles.axisLabel}
         noOfSections={4}
         hideRules={true}
