@@ -12,6 +12,7 @@ export type Position = {
   quantity: number;
   avg_price: number;
   market_price: number;
+  current_price: number;
   unrealized_pnl: number;
 };
 
@@ -35,6 +36,14 @@ export async function getSnapshot(): Promise<Snapshot> {
   return JSON.parse(text);
 }
 
+export async function getEquitySeries(): Promise<{ timestamp: number; total_equity: number }[]> {
+  const res = await fetch(`${API_BASE}/portfolio/equity_series`);
+  if (!res.ok) {
+    throw new Error("Failed to load equity series");
+  }
+  const data = await res.json();
+  return data.series ?? [];
+}
 
 export async function getPositions(): Promise<Position[]> {
   const res = await fetch(`${API_BASE}/portfolio/positions`);
@@ -80,6 +89,20 @@ export async function loadSymbol(symbol: string) {
 
   if (!res.ok) {
     throw new Error(data.error || "Failed to load symbol");
+  }
+
+  return data;
+}
+
+export async function refreshMarket(): Promise<Snapshot> {
+  const res = await fetch(`${API_BASE}/market/refresh`, {
+    method: "POST",
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to refresh market");
   }
 
   return data;
