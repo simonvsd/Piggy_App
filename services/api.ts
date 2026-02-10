@@ -151,6 +151,33 @@ export async function addCash(amount: number): Promise<Snapshot | void> {
   }
 }
 
+export async function removeCash(amount: number): Promise<Snapshot | void> {
+  const res = await fetch(`${API_BASE}/portfolio/remove_cash`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ amount }),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    let message = "Failed to remove cash";
+    if (text) {
+      try {
+        const data = JSON.parse(text);
+        message = data.error || message;
+      } catch {
+        message = text;
+      }
+    }
+    throw new Error(message);
+  }
+  if (!text || text.trim() === "") return;
+  try {
+    return JSON.parse(text) as Snapshot;
+  } catch {
+    return;
+  }
+}
+
 export type MarketHistoryPoint = { timestamp: number; close: number };
 
 export async function getMarketHistory(symbol: string) {
