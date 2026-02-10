@@ -22,9 +22,9 @@ import { notifyPortfolioChanged } from "../../services/portfolioEvents";
 
 
 const COLORS = {
-  background: "#f2f2f7",
+  background: "#B0C4DE",
   card: "#ffffff",
-  cardBorder: "#e5e5ea",
+  cardBorder: "#black",
   text: "#1c1c1e",
   textSecondary: "#8e8e93",
   inputBg: "#f2f2f7",
@@ -99,6 +99,24 @@ export default function TradeScreen() {
       ? [...history].sort((a, b) => a.timestamp - b.timestamp)[history.length - 1]?.close ?? null
       : null;
   const displayPrice = history.length > 0 ? (currentPrice ?? lastCloseFromHistory) : null;
+
+  function confirmTrade(side: "BUY" | "SELL") {
+    if (!canSubmit) return;
+    const sym = symbol.trim().toUpperCase() || "—";
+    const total = displayPrice != null ? (displayPrice * qtyNum).toFixed(2) : "—";
+    const message =
+      side === "BUY"
+        ? `Buy ${qtyNum} share${qtyNum !== 1 ? "s" : ""} of ${sym}?${displayPrice != null ? `\nTotal: $${total}` : ""}`
+        : `Sell ${qtyNum} share${qtyNum !== 1 ? "s" : ""} of ${sym}?`;
+    Alert.alert(
+      "Confirm",
+      message,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: side === "BUY" ? "Buy" : "Sell", onPress: () => submit(side) },
+      ]
+    );
+  }
 
   async function submit(side: "BUY" | "SELL") {
     if (!canSubmit) return;
@@ -211,7 +229,7 @@ export default function TradeScreen() {
       <View style={styles.buttons}>
         <TouchableOpacity
           style={[styles.button, styles.buyButton, !canSubmit && styles.buttonDisabled]}
-          onPress={() => submit("BUY")}
+          onPress={() => confirmTrade("BUY")}
           disabled={!canSubmit}
           activeOpacity={0.8}
         >
@@ -220,7 +238,7 @@ export default function TradeScreen() {
 
         <TouchableOpacity
           style={[styles.button, styles.sellButton, !canSubmit && styles.buttonDisabled]}
-          onPress={() => submit("SELL")}
+          onPress={() => confirmTrade("SELL")}
           disabled={!canSubmit}
           activeOpacity={0.8}
         >

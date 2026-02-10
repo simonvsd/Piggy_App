@@ -14,9 +14,9 @@ import { addCash, removeCash } from "../../services/api";
 import { notifyPortfolioChanged } from "../../services/portfolioEvents";
 
 const COLORS = {
-  background: "#f2f2f7",
+  background: "#B0C4DE",
   card: "#ffffff",
-  cardBorder: "#e5e5ea",
+  cardBorder: "#black",
   text: "#1c1c1e",
   textSecondary: "#8e8e93",
   inputBg: "#f2f2f7",
@@ -41,6 +41,18 @@ export default function PiggyBankScreen() {
   const removeAmountNum = Number(removeAmount);
   const isRemoveValid = !Number.isNaN(removeAmountNum) && removeAmountNum > 0;
   const canRemove = isRemoveValid && !removeLoading;
+
+  function confirmAddCash() {
+    if (!canSubmit) return;
+    Alert.alert(
+      "Confirm deposit",
+      `Deposit $${amountNum.toFixed(2)} to your cash balance?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Deposit", onPress: handleAddCash },
+      ]
+    );
+  }
 
   async function handleAddCash() {
     if (!canSubmit) return;
@@ -139,7 +151,7 @@ export default function PiggyBankScreen() {
 
             <TouchableOpacity
               style={[styles.button, !canSubmit && styles.buttonDisabled]}
-              onPress={handleAddCash}
+              onPress={confirmAddCash}
               disabled={!canSubmit}
               activeOpacity={0.8}
             >

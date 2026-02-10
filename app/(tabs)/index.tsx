@@ -17,9 +17,9 @@ import { subscribePortfolioChanged } from "../../services/portfolioEvents";
 const DEBUG = false;
 
 const COLORS = {
-  background: "#f2f2f7",
-  card: "#ffffff",
-  cardBorder: "#e5e5ea",
+  background: "#B0C4DE",
+  card: "#FFFFFF",
+  cardBorder: "#grey",
   cardShadow: "rgba(0,0,0,0.06)",
   text: "#1c1c1e",
   textSecondary: "#8e8e93",

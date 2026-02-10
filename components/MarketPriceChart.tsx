@@ -7,7 +7,7 @@ const CHART_HEIGHT = 200;
 const LINE_COLOR = "#1e88e5";
 const COLORS = {
   card: "#ffffff",
-  cardBorder: "#e5e5ea",
+  cardBorder: "#black",
   text: "#1c1c1e",
   textSecondary: "#8e8e93",
 };
@@ -142,6 +142,7 @@ export function MarketPriceChart({ series }: Props) {
           rulesThickness={1}
           showVerticalLines={false}
           yAxisLabelPrefix="$"
+          endSpacing={-30}
         />
       )}
     </View>
@@ -188,6 +189,10 @@ const styles = StyleSheet.create({
   },
   rangeLabelActive: {
     color: "#fff",
+  },
+  chartInset: {
+    width: "100%",
+    alignItems: "center",
   },
   emptyText: {
     fontSize: 15,
