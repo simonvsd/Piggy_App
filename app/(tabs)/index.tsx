@@ -228,6 +228,8 @@ export default function HomeScreen() {
           <Text style={styles.refreshButtonText}>Refresh</Text>
         </TouchableOpacity>
 
+        <Text style={styles.sectionTitle}>Total Equity</Text>
+
         <View style={chartLoading ? styles.chartCard : undefined}>
           {chartLoading ? (
             <>
