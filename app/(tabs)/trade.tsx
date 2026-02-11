@@ -1,9 +1,11 @@
 import { MarketPriceChart } from "@/components/MarketPriceChart";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Keyboard,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,9 +16,10 @@ import {
 } from "react-native";
 import {
   getMarketHistory,
-  getSnapshot,
+  getSymbolList,
+  loadSymbol,
   placeTrade,
-  type MarketHistoryPoint,
+  type MarketHistoryPoint
 } from "../../services/api";
 import { notifyPortfolioChanged } from "../../services/portfolioEvents";
 
@@ -38,39 +41,35 @@ export default function TradeScreen() {
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
   const [history, setHistory] = useState<MarketHistoryPoint[]>([]);
-  const lastKnownPricesRef = useRef<Record<string, number>>({});
-
+  const [symbolList, setSymbolList] = useState<string[]>([]);
+  const [symbolPickerVisible, setSymbolPickerVisible] = useState(false);
+  const [symbolSearch, setSymbolSearch] = useState("");
+  
   const loadPrice = useCallback(async () => {
     const sym = symbol.trim().toUpperCase();
+  
     if (!sym) {
       setCurrentPrice(null);
       return;
     }
+  
     setPriceLoading(true);
+  
     try {
-      const snapshot = await getSnapshot();
-      const position = snapshot.positions?.find(
-        (p) => symbol.toUpperCase() === sym
-      );
-      if (position != null) {
-        lastKnownPricesRef.current[sym] = position.current_price;
-        setCurrentPrice(position.current_price);
+      const data = await getMarketHistory(sym);
+  
+      if (data && Array.isArray(data.series) && data.series.length > 0) {
+        const latest = data.series[data.series.length - 1];
+        setCurrentPrice(latest.close);
       } else {
-        setCurrentPrice(lastKnownPricesRef.current[sym] ?? null);
+        setCurrentPrice(null);
       }
     } catch {
-      setCurrentPrice(lastKnownPricesRef.current[sym] ?? null);
+      setCurrentPrice(null);
     } finally {
       setPriceLoading(false);
     }
-  }, [symbol]);
-
-  useEffect(() => {
-    const sym = symbol.trim().toUpperCase();
-    if (sym && lastKnownPricesRef.current[sym] != null) {
-      setCurrentPrice(lastKnownPricesRef.current[sym]);
-    }
-  }, [symbol]);
+  }, [symbol]);  
 
   useEffect(() => {
     loadPrice();
@@ -78,20 +77,37 @@ export default function TradeScreen() {
 
   const loadHistory = useCallback(async () => {
     const sym = symbol.trim().toUpperCase();
+  
     if (!sym) {
       setHistory([]);
       return;
     }
-    const historyData = await getMarketHistory(sym).catch(() => []);
-    setHistory(Array.isArray(historyData) ? historyData : []);
+  
+    try {
+      await loadSymbol(sym).catch(() => {});
+      const data = await getMarketHistory(sym);
+      setHistory(Array.isArray(data) ? data : []);
+    } catch {
+      setHistory([]);
+    }
   }, [symbol]);
+  
 
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
 
+  useEffect(() => {
+    getSymbolList().then(setSymbolList);
+  }, []);
+
+  const filteredSymbols = symbolSearch.trim()
+    ? symbolList.filter((s) => s.toUpperCase().startsWith(symbolSearch.trim().toUpperCase()))
+    : symbolList;
+
   const qtyNum = Number(quantity);
-  const isValidQty = !Number.isNaN(qtyNum) && qtyNum > 0;
+  const isValidQty =
+    !Number.isNaN(qtyNum) && qtyNum > 0 && Number.isInteger(qtyNum);
   const canSubmit = isValidQty;
 
   const lastCloseFromHistory =
@@ -146,7 +162,17 @@ export default function TradeScreen() {
           showsVerticalScrollIndicator={true}
         >
         <View style={styles.card}>
-          <Text style={styles.label}>Symbol</Text>
+          <View style={styles.symbolRow}>
+            <Text style={styles.label}>Symbol</Text>
+            {symbolList.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSymbolPickerVisible(true)}
+                style={styles.chooseSymbolButton}
+              >
+                <Text style={styles.chooseSymbolButtonText}>Choose symbol</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <TextInput
           style={[styles.input, history.length > 0 && styles.symbolInputValid]}
           value={symbol}
@@ -220,7 +246,9 @@ export default function TradeScreen() {
           onSubmitEditing={Keyboard.dismiss}
         />
         {quantity !== "" && !isValidQty && (
-          <Text style={styles.inlineError}>Quantity must be greater than 0</Text>
+          <Text style={styles.inlineError}>
+            Quantity must be a whole number (e.g. 1, 2, 3)
+          </Text>
         )}
 
         {error != null && <Text style={styles.inlineError}>{error}</Text>}
@@ -253,6 +281,57 @@ export default function TradeScreen() {
         </>
       )}
         </ScrollView>
+
+        <Modal
+          visible={symbolPickerVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setSymbolPickerVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Pick symbol</Text>
+                <TouchableOpacity onPress={() => setSymbolPickerVisible(false)} style={styles.modalClose}>
+                  <Text style={styles.modalCloseText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+              {symbolList.length > 0 && (
+                <TextInput
+                  style={styles.modalSearch}
+                  placeholder="Search symbols..."
+                  placeholderTextColor={COLORS.textSecondary}
+                  value={symbolSearch}
+                  onChangeText={setSymbolSearch}
+                  autoCapitalize="characters"
+                />
+              )}
+              <FlatList
+                data={filteredSymbols}
+                keyExtractor={(item) => item}
+                style={styles.symbolList}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.symbolItem}
+                    onPress={() => {
+                      setSymbol(item);
+                      setSymbolPickerVisible(false);
+                      setSymbolSearch("");
+                    }}
+                  >
+                    <Text style={styles.symbolItemText}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <Text style={styles.symbolListEmpty}>
+                    {symbolList.length === 0 ? "Loading symbols…" : "No symbols match."}
+                  </Text>
+                }
+              />
+            </View>
+          </View>
+        </Modal>
       </View>
     </TouchableWithoutFeedback>
   );
@@ -294,6 +373,21 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: COLORS.text,
     marginBottom: 8,
+  },
+  symbolRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  chooseSymbolButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  chooseSymbolButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.text,
   },
   labelRow: {
     flexDirection: "row",
@@ -417,5 +511,71 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 12,
     marginTop: 24,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: "80%",
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.cardBorder,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  modalClose: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+  modalSearch: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 8,
+    padding: 12,
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 10,
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  symbolList: {
+    maxHeight: 400,
+  },
+  symbolItem: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.cardBorder,
+  },
+  symbolItemText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: COLORS.text,
+  },
+  symbolListEmpty: {
+    padding: 24,
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: "center",
   },
 });

@@ -4,6 +4,7 @@ import { LineChart } from "react-native-gifted-charts";
 
 const CARD_PADDING = 20;
 const CHART_HEIGHT = 200;
+const X_AXIS_LABEL_HEIGHT = 36;
 const LINE_COLOR = "#1e88e5";
 const COLORS = {
   card: "#ffffff",
@@ -106,7 +107,14 @@ export function MarketPriceChart({ series }: Props) {
   const chartData = seriesToChartData(downsampled);
   const screenWidth = Dimensions.get("window").width;
   const cardContentWidth = screenWidth - 20 * 2 - 20 * 2; // margins + padding
-  const chartWidth = Math.max(0, cardContentWidth - 20);  // extra inset so x-axis stays inside card
+  const chartWidth = Math.max(0, cardContentWidth - 20); // extra inset so x-axis stays inside card
+
+  // Force spacing so chart fits in box (avoids overflow with 1Y / 6+ months of data)
+  const pointCount = chartData.length;
+  const spacing =
+    pointCount <= 2
+      ? Math.max(40, chartWidth / (pointCount || 1))
+      : chartWidth / Math.max(1, pointCount - 1);
 
   return (
     <View style={styles.card}>
@@ -124,26 +132,33 @@ export function MarketPriceChart({ series }: Props) {
       {downsampled.length === 0 ? (
         <Text style={styles.emptyText}>No data for this range</Text>
       ) : (
-        <LineChart
-          data={chartData}
-          width={chartWidth}
-          height={CHART_HEIGHT}
-          color={LINE_COLOR}
-          thickness={2}
-          curvature={0.2}
-          hideDataPoints={chartData.length > 15}
-          spacing={chartData.length <= 2 ? Math.max(40, chartWidth / (chartData.length || 1)) : undefined}
-          xAxisLabelTextStyle={styles.axisLabel}
-          yAxisTextStyle={styles.axisLabel}
-          noOfSections={6}
-          hideRules={false}
-          rulesType="solid"
-          rulesColor="rgba(0,0,0,0.10)"
-          rulesThickness={1}
-          showVerticalLines={false}
-          yAxisLabelPrefix="$"
-          endSpacing={-30}
-        />
+        <View
+          style={[
+            styles.chartWrapper,
+            { width: chartWidth, height: CHART_HEIGHT + X_AXIS_LABEL_HEIGHT },
+          ]}
+        >
+          <LineChart
+            data={chartData}
+            width={chartWidth}
+            height={CHART_HEIGHT}
+            color={LINE_COLOR}
+            thickness={2}
+            curvature={0.2}
+            hideDataPoints={chartData.length > 15}
+            spacing={spacing}
+            xAxisLabelTextStyle={styles.axisLabel}
+            yAxisTextStyle={styles.axisLabel}
+            noOfSections={6}
+            hideRules={false}
+            rulesType="solid"
+            rulesColor="rgba(0,0,0,0.10)"
+            rulesThickness={1}
+            showVerticalLines={false}
+            yAxisLabelPrefix="$"
+            endSpacing={0}
+          />
+        </View>
       )}
     </View>
   );
@@ -189,6 +204,10 @@ const styles = StyleSheet.create({
   },
   rangeLabelActive: {
     color: "#fff",
+  },
+  chartWrapper: {
+    overflow: "hidden",
+    alignItems: "center",
   },
   chartInset: {
     width: "100%",

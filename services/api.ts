@@ -93,6 +93,18 @@ export async function placeTrade(symbol: string, side: "BUY" | "SELL", quantity:
   return data;
 }
 
+/** Returns the list of symbols from backend config (max 1000). Empty array if endpoint missing or fails. */
+export async function getSymbolList(): Promise<string[]> {
+  try {
+    const res = await fetch(`${API_BASE}/market/symbols`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const list = data.symbols ?? data.list ?? (Array.isArray(data) ? data : []);
+    return Array.isArray(list) ? list.filter((s: unknown) => typeof s === "string").slice(0, 1000) : [];
+  } catch {
+    return [];
+  }
+}
 
 export async function loadSymbol(symbol: string) {
   const res = await fetch(`${API_BASE}/market/load`, {

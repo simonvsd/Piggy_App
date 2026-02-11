@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { EquityChart, type EquitySeriesPoint } from "../../components/EquityChart";
+import { formatQuantity } from "@/utils/format";
 import { getEquitySeries, getSnapshot, Position, refreshMarket, Snapshot } from "../../services/api";
 import { subscribePortfolioChanged } from "../../services/portfolioEvents";
 
@@ -294,7 +295,7 @@ function PositionRow({ p, onPress }: { p: Position; onPress: () => void }) {
       </View>
 
       <View style={styles.rowRight}>
-        <Text style={styles.rowQty}>Qty {p.quantity}</Text>
+        <Text style={styles.rowQty}>Qty {formatQuantity(p.quantity)}</Text>
         <Text style={[styles.rowPnl, { color: pnlColor }]}>
           {p.unrealized_pnl >= 0 ? "+" : ""}${p.unrealized_pnl.toFixed(2)}
         </Text>
