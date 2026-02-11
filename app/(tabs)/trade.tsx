@@ -57,9 +57,9 @@ export default function TradeScreen() {
   
     try {
       const data = await getMarketHistory(sym);
-  
-      if (data && Array.isArray(data.series) && data.series.length > 0) {
-        const latest = data.series[data.series.length - 1];
+
+      if (Array.isArray(data) && data.length > 0) {
+        const latest = data[data.length - 1];
         setCurrentPrice(latest.close);
       } else {
         setCurrentPrice(null);

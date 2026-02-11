@@ -192,17 +192,31 @@ export async function removeCash(amount: number): Promise<Snapshot | void> {
 
 export type MarketHistoryPoint = { timestamp: number; close: number };
 
-export async function getMarketHistory(symbol: string) {
+export async function getMarketHistory(symbol: string): Promise<MarketHistoryPoint[]> {
   const res = await fetch(`${API_BASE}/market/history?symbol=${symbol}`);
 
   console.log("RAW MARKET HISTORY STATUS:", res.status);
 
-  const data = await res.json();
+  let data: { series?: unknown; prices?: unknown } | unknown;
+  try {
+    data = await res.json();
+  } catch {
+    if (!res.ok) return [];
+    throw new Error("Invalid response");
+  }
 
   console.log("RAW MARKET HISTORY RESPONSE:", data);
 
-  if (!res.ok) throw new Error("Failed to load history");
+  const obj = data && typeof data === "object" && !Array.isArray(data) ? data as { series?: unknown; prices?: unknown } : null;
+  const series = Array.isArray(obj?.series)
+    ? obj.series as MarketHistoryPoint[]
+    : Array.isArray(obj?.prices)
+      ? obj.prices as MarketHistoryPoint[]
+      : Array.isArray(data)
+        ? (data as MarketHistoryPoint[])
+        : [];
 
-  return data.series ?? data.prices ?? data ?? [];
+  if (!res.ok) return series;
+  return series;
 }
 
