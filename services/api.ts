@@ -192,8 +192,13 @@ export async function removeCash(amount: number): Promise<Snapshot | void> {
 
 export type MarketHistoryPoint = { timestamp: number; close: number };
 
+/**
+ * Use the symbol exactly as given by the backend (e.g. NOVN.SW, 0xBTC-USD.CC).
+ * Only trim whitespace and URL-encode for the request.
+ */
 export async function getMarketHistory(symbol: string): Promise<MarketHistoryPoint[]> {
-  const res = await fetch(`${API_BASE}/market/history?symbol=${symbol}`);
+  const encoded = encodeURIComponent(symbol.trim());
+  const res = await fetch(`${API_BASE}/market/history?symbol=${encoded}`);
 
   console.log("RAW MARKET HISTORY STATUS:", res.status);
 

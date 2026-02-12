@@ -45,7 +45,7 @@ export default function PositionDetailScreen() {
   const [positionQuantity, setPositionQuantity] = useState(0);
 
   const load = useCallback(async () => {
-    const sym = symbol ?? "";
+    const sym = (symbol ?? "").trim();
     if (!sym) {
       setError("No symbol");
       setLoading(false);
@@ -173,9 +173,18 @@ export default function PositionDetailScreen() {
         >
           <View style={styles.priceCard}>
             <Text style={styles.priceLabel}>Current price</Text>
-            <Text style={styles.priceValue}>
-              {displayPrice != null ? `$${displayPrice.toFixed(2)}` : "—"}
-            </Text>
+            {displayPrice != null ? (
+              <Text style={styles.priceValue}>${displayPrice.toFixed(2)}</Text>
+            ) : (
+              <>
+                <Text style={styles.priceUnavailable}>Not available</Text>
+                {!loading && history.length === 0 && (
+                  <Text style={styles.priceUnavailableHint}>
+                    No price history for this symbol from the data provider.
+                  </Text>
+                )}
+              </>
+            )}
           </View>
 
           <Text style={styles.sectionTitle}>Price history</Text>
@@ -303,6 +312,15 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     color: COLORS.text,
+  },
+  priceUnavailable: {
+    fontSize: 18,
+    color: COLORS.textSecondary,
+  },
+  priceUnavailableHint: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 6,
   },
   sectionTitle: {
     fontSize: 18,

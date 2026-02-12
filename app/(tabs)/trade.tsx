@@ -46,15 +46,12 @@ export default function TradeScreen() {
   const [symbolSearch, setSymbolSearch] = useState("");
   
   const loadPrice = useCallback(async () => {
-    const sym = symbol.trim().toUpperCase();
-  
+    const sym = symbol.trim();
     if (!sym) {
       setCurrentPrice(null);
       return;
     }
-  
     setPriceLoading(true);
-  
     try {
       const data = await getMarketHistory(sym);
 
@@ -76,13 +73,11 @@ export default function TradeScreen() {
   }, [loadPrice]);
 
   const loadHistory = useCallback(async () => {
-    const sym = symbol.trim().toUpperCase();
-  
+    const sym = symbol.trim();
     if (!sym) {
       setHistory([]);
       return;
     }
-  
     try {
       await loadSymbol(sym).catch(() => {});
       const data = await getMarketHistory(sym);

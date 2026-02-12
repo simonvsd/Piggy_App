@@ -99,7 +99,8 @@ export function MarketPriceChart({ series }: Props) {
   if (!series || series.length === 0) {
     return (
       <View style={styles.card}>
-        <Text style={styles.emptyText}>No history available</Text>
+        <Text style={styles.emptyText}>No price history available for this symbol.</Text>
+        <Text style={styles.emptySubtext}>The data provider may not support this symbol or exchange.</Text>
       </View>
     );
   }
@@ -216,6 +217,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 15,
     color: COLORS.textSecondary,
+  },
+  emptySubtext: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 6,
+    textAlign: "center",
   },
   axisLabel: {
     fontSize: 10,
