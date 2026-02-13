@@ -3,9 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Keyboard,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,7 +17,8 @@ import {
   getSymbolList,
   loadSymbol,
   placeTrade,
-  type MarketHistoryPoint
+  type MarketHistoryPoint,
+  type SymbolOption,
 } from "../../services/api";
 import { notifyPortfolioChanged } from "../../services/portfolioEvents";
 
@@ -34,19 +33,22 @@ const COLORS = {
   error: "#ff3b30",
 };
 
+const DROPDOWN_MAX_ITEMS = 5;
+
 export default function TradeScreen() {
-  const [symbol, setSymbol] = useState("AAPL");
+  const [symbolInput, setSymbolInput] = useState("");
+  const [selectedSymbol, setSelectedSymbol] = useState<SymbolOption | null>(null);
   const [quantity, setQuantity] = useState("1");
   const [error, setError] = useState<string | null>(null);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
   const [history, setHistory] = useState<MarketHistoryPoint[]>([]);
-  const [symbolList, setSymbolList] = useState<string[]>([]);
-  const [symbolPickerVisible, setSymbolPickerVisible] = useState(false);
-  const [symbolSearch, setSymbolSearch] = useState("");
-  
+  const [symbolList, setSymbolList] = useState<SymbolOption[]>([]);
+
+  const symbolForApi = (selectedSymbol?.symbol ?? symbolInput).trim();
+
   const loadPrice = useCallback(async () => {
-    const sym = symbol.trim();
+    const sym = (selectedSymbol?.symbol ?? symbolInput).trim();
     if (!sym) {
       setCurrentPrice(null);
       return;
@@ -54,7 +56,6 @@ export default function TradeScreen() {
     setPriceLoading(true);
     try {
       const data = await getMarketHistory(sym);
-
       if (Array.isArray(data) && data.length > 0) {
         const latest = data[data.length - 1];
         setCurrentPrice(latest.close);
@@ -66,14 +67,14 @@ export default function TradeScreen() {
     } finally {
       setPriceLoading(false);
     }
-  }, [symbol]);  
+  }, [selectedSymbol?.symbol, symbolInput]);
 
   useEffect(() => {
     loadPrice();
   }, [loadPrice]);
 
   const loadHistory = useCallback(async () => {
-    const sym = symbol.trim();
+    const sym = (selectedSymbol?.symbol ?? "").trim();
     if (!sym) {
       setHistory([]);
       return;
@@ -85,7 +86,7 @@ export default function TradeScreen() {
     } catch {
       setHistory([]);
     }
-  }, [symbol]);
+  }, [selectedSymbol?.symbol, symbolInput]);
   
 
   useEffect(() => {
@@ -93,17 +94,29 @@ export default function TradeScreen() {
   }, [loadHistory]);
 
   useEffect(() => {
-    getSymbolList().then(setSymbolList);
+    getSymbolList().then((list) => {
+      setSymbolList(list);
+    });
   }, []);
 
-  const filteredSymbols = symbolSearch.trim()
-    ? symbolList.filter((s) => s.toUpperCase().startsWith(symbolSearch.trim().toUpperCase()))
-    : symbolList;
+  const searchQuery = symbolInput.trim().toLowerCase();
+  const filteredSymbols = searchQuery
+    ? symbolList.filter(
+        (item) =>
+          item.symbol.toLowerCase().includes(searchQuery) ||
+          item.name.toLowerCase().includes(searchQuery)
+      )
+    : [];
+  const dropdownOptions = filteredSymbols.slice(0, DROPDOWN_MAX_ITEMS);
+  const showDropdown =
+    symbolInput.trim().length > 0 &&
+    dropdownOptions.length > 0 &&
+    (selectedSymbol == null || symbolInput !== `${selectedSymbol.symbol} (${selectedSymbol.name})`);
 
   const qtyNum = Number(quantity);
   const isValidQty =
     !Number.isNaN(qtyNum) && qtyNum > 0 && Number.isInteger(qtyNum);
-  const canSubmit = isValidQty;
+  const canSubmit = symbolForApi.length > 0 && isValidQty;
 
   const lastCloseFromHistory =
     history.length > 0
@@ -113,7 +126,7 @@ export default function TradeScreen() {
 
   function confirmTrade(side: "BUY" | "SELL") {
     if (!canSubmit) return;
-    const sym = symbol.trim().toUpperCase() || "—";
+    const sym = symbolForApi;
     const total = displayPrice != null ? (displayPrice * qtyNum).toFixed(2) : "—";
     const message =
       side === "BUY"
@@ -133,7 +146,7 @@ export default function TradeScreen() {
     if (!canSubmit) return;
     setError(null);
     try {
-      const result = await placeTrade(symbol, side, qtyNum);
+      const result = await placeTrade(symbolForApi, side, qtyNum);
       notifyPortfolioChanged();
       Alert.alert("Success", JSON.stringify(result, null, 2));
     } catch (err: any) {
@@ -157,38 +170,52 @@ export default function TradeScreen() {
           showsVerticalScrollIndicator={true}
         >
         <View style={styles.card}>
-          <View style={styles.symbolRow}>
-            <Text style={styles.label}>Symbol</Text>
-            {symbolList.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSymbolPickerVisible(true)}
-                style={styles.chooseSymbolButton}
-              >
-                <Text style={styles.chooseSymbolButtonText}>Choose symbol</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <Text style={styles.label}>Symbol</Text>
           <TextInput
-          style={[styles.input, history.length > 0 && styles.symbolInputValid]}
-          value={symbol}
-          onChangeText={(t) => {
-            setSymbol(t);
-            setError(null);
-          }}
-          placeholder="e.g. AAPL"
-          placeholderTextColor={COLORS.textSecondary}
-          autoCapitalize="characters"
-
-          returnKeyType="done"
-          onSubmitEditing={Keyboard.dismiss}
-          blurOnSubmit={true}
-        />
-
+            style={[styles.input, history.length > 0 && styles.symbolInputValid]}
+            value={symbolInput}
+            onChangeText={(t) => {
+              setSymbolInput(t);
+              setError(null);
+              if (
+                selectedSymbol &&
+                t !== `${selectedSymbol.symbol} (${selectedSymbol.name})`
+              ) {
+                setSelectedSymbol(null);
+              }
+            }}
+            placeholder="e.g. AAPL"
+            placeholderTextColor={COLORS.textSecondary}
+            autoCapitalize="characters"
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
+          />
+          {showDropdown && (
+            <View style={styles.dropdown}>
+              {dropdownOptions.map((item, index) => (
+                <TouchableOpacity
+                  key={item.symbol}
+                  style={[
+                    styles.dropdownItem,
+                    index === dropdownOptions.length - 1 && styles.dropdownItemLast,
+                  ]}
+                  onPress={() => {
+                    setSelectedSymbol(item);
+                    setSymbolInput(`${item.symbol} (${item.name})`);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>
+                    {item.symbol} ({item.name})
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
         <View style={styles.priceRow}>
           <View style={styles.priceLabelRow}>
             <Text style={styles.priceLabel}>
-              Current {symbol.trim() || "—"} Price:{" "}
+              Current {symbolForApi || "—"} Price:{" "}
             </Text>
             {priceLoading ? (
               <ActivityIndicator size="small" color={COLORS.textSecondary} />
@@ -269,64 +296,13 @@ export default function TradeScreen() {
         </TouchableOpacity>
       </View>
 
-      {symbol.trim() !== "" && (
+      {symbolForApi !== "" && (
         <>
-          <Text style={styles.sectionTitle}>{symbol.trim().toUpperCase() || "—"} Price history</Text>
+          <Text style={styles.sectionTitle}>{symbolForApi} Price history</Text>
           <MarketPriceChart series={history} />
         </>
       )}
         </ScrollView>
-
-        <Modal
-          visible={symbolPickerVisible}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setSymbolPickerVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Pick symbol</Text>
-                <TouchableOpacity onPress={() => setSymbolPickerVisible(false)} style={styles.modalClose}>
-                  <Text style={styles.modalCloseText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-              {symbolList.length > 0 && (
-                <TextInput
-                  style={styles.modalSearch}
-                  placeholder="Search symbols..."
-                  placeholderTextColor={COLORS.textSecondary}
-                  value={symbolSearch}
-                  onChangeText={setSymbolSearch}
-                  autoCapitalize="characters"
-                />
-              )}
-              <FlatList
-                data={filteredSymbols}
-                keyExtractor={(item) => item}
-                style={styles.symbolList}
-                keyboardShouldPersistTaps="handled"
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.symbolItem}
-                    onPress={() => {
-                      setSymbol(item);
-                      setSymbolPickerVisible(false);
-                      setSymbolSearch("");
-                    }}
-                  >
-                    <Text style={styles.symbolItemText}>{item}</Text>
-                  </TouchableOpacity>
-                )}
-                ListEmptyComponent={
-                  <Text style={styles.symbolListEmpty}>
-                    {symbolList.length === 0 ? "Loading symbols…" : "No symbols match."}
-                  </Text>
-                }
-              />
-            </View>
-          </View>
-        </Modal>
       </View>
     </TouchableWithoutFeedback>
   );
@@ -454,8 +430,40 @@ const styles = StyleSheet.create({
     fontSize: 17,
     marginBottom: 16,
   },
+  symbolInputTouchable: {
+    justifyContent: "center",
+  },
+  symbolInputText: {
+    fontSize: 17,
+    color: COLORS.text,
+  },
+  symbolInputPlaceholder: {
+    color: COLORS.textSecondary,
+  },
   symbolInputValid: {
     fontWeight: "700",
+  },
+  dropdown: {
+    marginTop: -8,
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    overflow: "hidden",
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.cardBorder,
+  },
+  dropdownItemText: {
+    fontSize: 15,
+    color: COLORS.text,
+  },
+  dropdownItemLast: {
+    borderBottomWidth: 0,
   },
   inputError: {
     borderWidth: 1,

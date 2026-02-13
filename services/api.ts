@@ -93,14 +93,34 @@ export async function placeTrade(symbol: string, side: "BUY" | "SELL", quantity:
   return data;
 }
 
-/** Returns the list of symbols from backend config (max 1000). Empty array if endpoint missing or fails. */
-export async function getSymbolList(): Promise<string[]> {
+/** List entry from GET /market/symbols: { symbol, name } */
+export type SymbolOption = { symbol: string; name: string };
+
+/** Returns symbol list from GET /market/symbols. Empty array if endpoint missing or fails. */
+export async function getSymbolList(): Promise<SymbolOption[]> {
   try {
     const res = await fetch(`${API_BASE}/market/symbols`);
     if (!res.ok) return [];
     const data = await res.json();
     const list = data.symbols ?? data.list ?? (Array.isArray(data) ? data : []);
-    return Array.isArray(list) ? list.filter((s: unknown) => typeof s === "string").slice(0, 1000) : [];
+    if (!Array.isArray(list)) return [];
+    return list
+      .map((item: unknown): SymbolOption | null => {
+        if (item == null) return null;
+        if (typeof item === "string") {
+          return { symbol: item, name: item };
+        }
+        if (typeof item === "object" && typeof (item as { symbol?: unknown }).symbol === "string") {
+          const o = item as { symbol: string; name?: string };
+          return {
+            symbol: String(o.symbol),
+            name: typeof o.name === "string" ? o.name : String(o.symbol),
+          };
+        }
+        return null;
+      })
+      .filter((s): s is SymbolOption => s != null)
+      .slice(0, 1000);
   } catch {
     return [];
   }
