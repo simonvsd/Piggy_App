@@ -1,5 +1,5 @@
 import { MarketPriceChart } from "@/components/MarketPriceChart";
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +35,42 @@ const COLORS = {
 
 const DROPDOWN_MAX_ITEMS = 5;
 
+const DropdownItem = React.memo(function DropdownItem({
+  item,
+  isLast,
+  onSelect,
+}: {
+  item: SymbolOption;
+  isLast: boolean;
+  onSelect: (item: SymbolOption) => void;
+}) {
+  const onPress = useCallback(() => onSelect(item), [item, onSelect]);
+  return (
+    <TouchableOpacity
+      style={[dropdownItemStyles.item, isLast && dropdownItemStyles.itemLast]}
+      onPress={onPress}
+    >
+      <Text style={dropdownItemStyles.text}>
+        {item.symbol} ({item.name})
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
+function makeDropdownItemStyles(colors: typeof COLORS) {
+  return StyleSheet.create({
+    item: {
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.cardBorder,
+    },
+    itemLast: { borderBottomWidth: 0 },
+    text: { fontSize: 15, color: colors.text },
+  });
+}
+const dropdownItemStyles = makeDropdownItemStyles(COLORS);
+
 export default function TradeScreen() {
   const [symbolInput, setSymbolInput] = useState("");
   const [selectedSymbol, setSelectedSymbol] = useState<SymbolOption | null>(null);
@@ -45,7 +81,10 @@ export default function TradeScreen() {
   const [history, setHistory] = useState<MarketHistoryPoint[]>([]);
   const [symbolList, setSymbolList] = useState<SymbolOption[]>([]);
 
-  const symbolForApi = (selectedSymbol?.symbol ?? symbolInput).trim();
+  const symbolForApi = useMemo(
+    () => (selectedSymbol?.symbol ?? symbolInput).trim(),
+    [selectedSymbol?.symbol, symbolInput]
+  );
 
   const loadPrice = useCallback(async () => {
     const sym = (selectedSymbol?.symbol ?? symbolInput).trim();
@@ -74,7 +113,7 @@ export default function TradeScreen() {
   }, [loadPrice]);
 
   const loadHistory = useCallback(async () => {
-    const sym = (selectedSymbol?.symbol ?? "").trim();
+    const sym = (selectedSymbol?.symbol ?? symbolInput).trim();
     if (!sym) {
       setHistory([]);
       return;
@@ -100,18 +139,48 @@ export default function TradeScreen() {
   }, []);
 
   const searchQuery = symbolInput.trim().toLowerCase();
-  const filteredSymbols = searchQuery
-    ? symbolList.filter(
-        (item) =>
-          item.symbol.toLowerCase().includes(searchQuery) ||
-          item.name.toLowerCase().includes(searchQuery)
-      )
-    : [];
-  const dropdownOptions = filteredSymbols.slice(0, DROPDOWN_MAX_ITEMS);
-  const showDropdown =
-    symbolInput.trim().length > 0 &&
-    dropdownOptions.length > 0 &&
-    (selectedSymbol == null || symbolInput !== `${selectedSymbol.symbol} (${selectedSymbol.name})`);
+  const filteredSymbols = useMemo(
+    () =>
+      searchQuery
+        ? symbolList.filter(
+            (item) =>
+              item.symbol.toLowerCase().includes(searchQuery) ||
+              item.name.toLowerCase().includes(searchQuery)
+          )
+        : [],
+    [symbolList, searchQuery]
+  );
+  const dropdownOptions = useMemo(
+    () => filteredSymbols.slice(0, DROPDOWN_MAX_ITEMS),
+    [filteredSymbols]
+  );
+  const showDropdown = useMemo(
+    () =>
+      symbolInput.trim().length > 0 &&
+      dropdownOptions.length > 0 &&
+      (selectedSymbol == null ||
+        symbolInput !== `${selectedSymbol.symbol} (${selectedSymbol.name})`),
+    [symbolInput, dropdownOptions.length, selectedSymbol]
+  );
+
+  const handleSymbolSelect = useCallback((item: SymbolOption) => {
+    setSelectedSymbol(item);
+    setSymbolInput(`${item.symbol} (${item.name})`);
+  }, []);
+
+  const handleSymbolChangeText = useCallback(
+    (t: string) => {
+      setSymbolInput(t);
+      setError(null);
+      if (
+        selectedSymbol &&
+        t !== `${selectedSymbol.symbol} (${selectedSymbol.name})`
+      ) {
+        setSelectedSymbol(null);
+      }
+    },
+    [selectedSymbol]
+  );
 
   const qtyNum = Number(quantity);
   const isValidQty =
@@ -174,16 +243,7 @@ export default function TradeScreen() {
           <TextInput
             style={[styles.input, history.length > 0 && styles.symbolInputValid]}
             value={symbolInput}
-            onChangeText={(t) => {
-              setSymbolInput(t);
-              setError(null);
-              if (
-                selectedSymbol &&
-                t !== `${selectedSymbol.symbol} (${selectedSymbol.name})`
-              ) {
-                setSelectedSymbol(null);
-              }
-            }}
+            onChangeText={handleSymbolChangeText}
             placeholder="e.g. AAPL"
             placeholderTextColor={COLORS.textSecondary}
             autoCapitalize="characters"
@@ -193,21 +253,12 @@ export default function TradeScreen() {
           {showDropdown && (
             <View style={styles.dropdown}>
               {dropdownOptions.map((item, index) => (
-                <TouchableOpacity
+                <DropdownItem
                   key={item.symbol}
-                  style={[
-                    styles.dropdownItem,
-                    index === dropdownOptions.length - 1 && styles.dropdownItemLast,
-                  ]}
-                  onPress={() => {
-                    setSelectedSymbol(item);
-                    setSymbolInput(`${item.symbol} (${item.name})`);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>
-                    {item.symbol} ({item.name})
-                  </Text>
-                </TouchableOpacity>
+                  item={item}
+                  isLast={index === dropdownOptions.length - 1}
+                  onSelect={handleSymbolSelect}
+                />
               ))}
             </View>
           )}
@@ -451,19 +502,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.cardBorder,
     overflow: "hidden",
-  },
-  dropdownItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder,
-  },
-  dropdownItemText: {
-    fontSize: 15,
-    color: COLORS.text,
-  },
-  dropdownItemLast: {
-    borderBottomWidth: 0,
   },
   inputError: {
     borderWidth: 1,

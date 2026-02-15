@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,6 +13,10 @@ import { EquityChart, type EquitySeriesPoint } from "../../components/EquityChar
 import { formatQuantity } from "@/utils/format";
 import { getEquitySeries, getSnapshot, Position, refreshMarket, Snapshot } from "../../services/api";
 import { subscribePortfolioChanged } from "../../services/portfolioEvents";
+
+const INITIAL_NUM_TO_RENDER = 10;
+const MAX_TO_RENDER_PER_BATCH = 10;
+const WINDOW_SIZE = 5;
 
 
 const DEBUG = false;
@@ -177,39 +181,33 @@ export default function HomeScreen() {
     return () => unsub();
   }, [load]);
 
-  if (loading && !snapshot) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.textSecondary} />
-        <Text style={styles.loadingText}>Loading portfolio…</Text>
+  const positions = snapshot?.positions ?? [];
+
+  const handlePositionPress = useCallback(
+    (symbol: string) => {
+      router.push((`/position/${symbol}`) as Parameters<typeof router.push>[0]);
+    },
+    [router]
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: Position }) => (
+      <View style={styles.listItemWrapper}>
+        <PositionRow p={item} onPress={handlePositionPress} symbol={item.symbol} />
       </View>
-    );
-  }
+    ),
+    [handlePositionPress]
+  );
 
-  if (!snapshot) {
+  const keyExtractor = useCallback((item: Position) => item.symbol, []);
+
+  const listHeaderComponent = useMemo(() => {
+    if (!snapshot) return null;
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Error loading portfolio</Text>
-      </View>
-    );
-  }
-
-  const positions = snapshot.positions ?? [];
-
-  return (
-    <View style={styles.container}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.textSecondary} />
-        }
-        showsVerticalScrollIndicator={true}
-      >
+      <>
         <View style={styles.header}>
           <Text style={styles.title}>🐷 Piggy Bank</Text>
         </View>
-
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Total Equity</Text>
           <Text style={styles.totalEquity}>${snapshot.total_equity.toFixed(2)}</Text>
@@ -224,13 +222,10 @@ export default function HomeScreen() {
             </Text>
           </View>
         </View>
-
         <TouchableOpacity style={styles.refreshButton} onPress={handleRefreshMarket}>
           <Text style={styles.refreshButtonText}>Refresh</Text>
         </TouchableOpacity>
-
         <Text style={styles.sectionTitle}>Total Equity</Text>
-
         <View style={chartLoading ? styles.chartCard : undefined}>
           {chartLoading ? (
             <>
@@ -254,46 +249,89 @@ export default function HomeScreen() {
             </>
           )}
         </View>
-
         <Text style={styles.sectionTitle}>Positions</Text>
+      </>
+    );
+  }, [snapshot, chartLoading, chartRange, series, handleRefreshMarket]);
 
-        {positions.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No positions</Text>
-            <Text style={styles.emptySubtext}>Place a trade to see positions here.</Text>
-          </View>
-        ) : (
-          <View style={styles.listContent}>
-            {positions.map((item) => (
-              <PositionRow
-                key={item.symbol}
-                p={item}
-                onPress={() => router.push((`/position/${item.symbol}`) as Parameters<typeof router.push>[0])}
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+  const listEmptyComponent = useMemo(
+    () => (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyText}>No positions</Text>
+        <Text style={styles.emptySubtext}>Place a trade to see positions here.</Text>
+      </View>
+    ),
+    []
+  );
+
+  const refreshControl = useMemo(
+    () => (
+      <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.textSecondary} />
+    ),
+    [refreshing, onRefresh]
+  );
+
+  if (loading && !snapshot) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.textSecondary} />
+        <Text style={styles.loadingText}>Loading portfolio…</Text>
+      </View>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Error loading portfolio</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={positions}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={listHeaderComponent}
+        ListEmptyComponent={listEmptyComponent}
+        refreshControl={refreshControl}
+        initialNumToRender={INITIAL_NUM_TO_RENDER}
+        maxToRenderPerBatch={MAX_TO_RENDER_PER_BATCH}
+        windowSize={WINDOW_SIZE}
+        removeClippedSubviews={true}
+        contentContainerStyle={positions.length === 0 ? styles.scrollContentEmpty : styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+        decelerationRate="normal"
+      />
     </View>
   );
 }
 
-function PositionRow({ p, onPress }: { p: Position; onPress: () => void }) {
+const PositionRow = React.memo(function PositionRow({
+  p,
+  onPress,
+  symbol,
+}: {
+  p: Position;
+  onPress: (symbol: string) => void;
+  symbol: string;
+}) {
   const pnlColor =
-    p.unrealized_pnl > 0
-      ? COLORS.positive
-      : p.unrealized_pnl < 0
-      ? COLORS.negative
-      : COLORS.text;
+    p.unrealized_pnl > 0 ? COLORS.positive : p.unrealized_pnl < 0 ? COLORS.negative : COLORS.text;
+
+  const handlePress = useCallback(() => {
+    onPress(symbol);
+  }, [onPress, symbol]);
 
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.row} onPress={handlePress} activeOpacity={0.7}>
       <View>
         <Text style={styles.rowSymbol}>
           {p.symbol} (${p.current_price.toFixed(2)})
         </Text>
       </View>
-
       <View style={styles.rowRight}>
         <Text style={styles.rowQty}>Qty {formatQuantity(p.quantity)}</Text>
         <Text style={[styles.rowPnl, { color: pnlColor }]}>
@@ -302,7 +340,7 @@ function PositionRow({ p, onPress }: { p: Position; onPress: () => void }) {
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 
 const styles = StyleSheet.create({
@@ -315,6 +353,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 32,
+  },
+  scrollContentEmpty: {
+    paddingBottom: 32,
+    flexGrow: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -443,6 +485,9 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 20,
     paddingBottom: 24,
+  },
+  listItemWrapper: {
+    paddingHorizontal: 20,
   },
   listEmpty: {
     flexGrow: 1,
